@@ -30,8 +30,8 @@
 			<tbody>
 				<tr ng-repeat="next in pageCtrl.data">
 					<td>{{next.name}}</td>
-					<td>{{next.hosts}}</td>
-					<td>{{next.ports}}</td>
+					<td>{{pageCtrl.formatHosts(next.hosts)}}</td>
+					<td>{{pageCtrl.formatPorts(next.ports)}}</td>
 					<td>
 						<i class="close fa fa-remove" ng-click="pageCtrl.openDeleteDialog(next)" style="font-size: 1.4em"></i>
 						<i class="close fa fa-bars" ng-click="pageCtrl.openNewDialog(next)" style="margin-right: 0.5em; font-size: 1.4em"></i>
@@ -46,11 +46,10 @@
 			<div class="modal-content">
 				<div class="modal-header">
 					<div class="col-sm-8">
-						<h3 ng-show="pageCtrl.actionType === 'new'" class="modal-title" id="createEntityLbl">Register New Service</h3>
-						<h3 ng-show="pageCtrl.actionType === 'update'" class="modal-title" id="updateEntityLbl">Update Service registration</h3>
-						<h3 ng-show="pageCtrl.actionType === 'delete'" class="modal-title" id="deleteEntityLbl">Remove Service Registration</h3>
-						<small ng-show="pageCtrl.entity.id" style="display:block; margin-top: 10px;">Created: {{pageCtrl.parseDate(pageCtrl.entity.createTime) | date: 'medium'}} by <span  ng-bind="pageCtrl.entity.user"></span></small>
-						<small ng-show="pageCtrl.entity.id">Last Modified: {{pageCtrl.parseDate(pageCtrl.entity.lastModifiedTime) || pageCtrl.parseDate(pageCtrl.entity.createTime) | date: 'medium'}} by <span  ng-bind="pageCtrl.entity.user"></span></small>
+						<h3 ng-show="pageCtrl.actionType === 'new'" class="modal-title" id="createEntityLbl">New Backing Service</h3>
+						<h3 ng-show="pageCtrl.actionType === 'update'" class="modal-title" id="updateEntityLbl">Update Backing Service</h3>
+						<h3 ng-show="pageCtrl.actionType === 'delete'" class="modal-title" id="deleteEntityLbl">Remove Backing Service</h3>
+						<small ng-show="pageCtrl.entity.createTime" style="display:block; margin-top: 10px;">Created: {{pageCtrl.parseDate(pageCtrl.entity.createTime) | date: 'medium'}}</small>
 					</div>
 					<button type="button" class="close" data-dismiss="modal" aria-label="Close">
 						<span aria-hidden="true">&times;</span>
@@ -60,25 +59,42 @@
 					<form ng-hide="pageCtrl.actionType === 'delete'">
 						<div class="form-group">
 							<label>Name</label>
-							<input type="text" class="form-control" name="name" placeholder="Enter service name" ng-model="pageCtrl.entity.name">
+							<input type="text" class="form-control" name="name" placeholder="Enter service name" ng-model="pageCtrl.entity.name" required pattern="([A-z0-9a-z-_]){1,64}">
 						</div>
 						<div class="form-group">
-							<label>Host</label>
-							<input type="text" class="form-control" name="name" placeholder="Host URL" ng-model="pageCtrl.entity.host">
+							<label style="display: block;">Hosts</label>
+							<small ng-if="pageCtrl.entity.hosts.length === 0" style="display: block;margin-bottom: 10px">-- No hosts --</small>
+							<div class="form-group" ng-repeat="host in pageCtrl.entity.hosts track by $index">
+								<input type="text" class="form-control" style="display:inline;width:90%" name="name" placeholder="Service Host URL" ng-model="pageCtrl.entity.hosts[$index]" required>
+								<i class="close fa fa-minus" ng-click="pageCtrl.removeHost(host)" style="font-size: 1.4em"></i>
+							</div>
+							<div class="form-group">
+								<input type="text" class="form-control" style="display:inline;width:90%" placeholder="Service Host URL" ng-model="pageCtrl.host">
+								<i class="close fa fa-plus" ng-click="pageCtrl.addHost()" style="font-size: 1.4em"></i>
+							</div>							
 						</div>					
 						<div class="form-group">
-							<label style="display: block;">Port</label>
-							<input type="text" class="form-control" style="display: inline; width:40%" name="name" placeholder="Enter port protocol" ng-model="pageCtrl.entity.portProto">
-							<input type="text" class="form-control" style="display: inline; width:40%" name="name" placeholder="Enter port number" ng-model="pageCtrl.entity.portNumber">
+							<label style="display: block;">Ports</label>
+							<small ng-if="pageCtrl.entity.ports.length === 0" style="display: block;margin-bottom: 10px">-- No ports --</small>
+							<div class="form-group" ng-repeat="port in pageCtrl.entity.ports">
+								<input type="text" class="form-control" style="display: inline; width:45%" name="name" placeholder="Enter port protocol (TCP,UDP)" ng-model="port.protocol"  pattern="^(TCP|UDP|tcp|udp)$" required>
+								<input type="number" class="form-control" style="display: inline; width:45%" name="name" placeholder="Enter port number (1-65535)" min="1" max="65535" ng-model="port.number" required>
+								<i class="close fa fa-minus" ng-click="pageCtrl.removePort(port)" style="font-size: 1.4em"></i>
+							</div>
+							<div class="form-group">
+								<input type="text" class="form-control" style="display:inline;width:45%" placeholder="Enter port protocol (TCP,UDP)" ng-model="pageCtrl.port.protocol" pattern="^(TCP|UDP|tcp|udp)$">
+								<input type="number" class="form-control" style="display:inline;width:45%" placeholder="Enter port number (1-65535)" ng-model="pageCtrl.port.number" min="1" max="65535">
+								<i class="close fa fa-plus" ng-click="pageCtrl.addPort()" style="font-size: 1.4em"></i>
+							</div>
 						</div>	
 					</form>
 					<div ng-show="pageCtrl.actionType === 'delete'">
-						You are going to <b>delete</b> Service Registration <b>{{pageCtrl.entity.name}}</b>.
+						You are going to <b>delete</b> backing service <b>{{pageCtrl.entity.name}}</b>.
 					</div>
 				</div>
 				<div class="modal-footer">
-					<button type="button" class="btn btn-primary" ng-show="pageCtrl.actionType === 'new'" ng-click="pageCtrl.create()" ng-disabled="!pageCtrl.entity.name">Save</button>
-					<button type="button" class="btn btn-primary" ng-show="pageCtrl.actionType === 'update'" ng-click="pageCtrl.update()" ng-disabled="!pageCtrl.entity.name">Update</button>
+					<button type="button" class="btn btn-primary" ng-show="pageCtrl.actionType === 'new'" ng-click="pageCtrl.create()" ng-disabled="!pageCtrl.canSubmit()">Save</button>
+					<button type="button" class="btn btn-primary" ng-show="pageCtrl.actionType === 'update'" ng-click="pageCtrl.update()" ng-disabled="!pageCtrl.canSubmit()">Update</button>
 					<button type="button" class="btn btn-primary" ng-show="pageCtrl.actionType === 'delete'" ng-click="pageCtrl.delete()">Delete</button>
 					<button type="button" class="btn btn-danger" data-dismiss="modal" ng-click="pageCtrl.close()">Close</button>
 				</div>
@@ -116,6 +132,12 @@
 
 	<script type="text/javascript" src="js/ng-rs.js"></script>
 	<script type="text/javascript" src="js/controller.js"></script>
+
+	<style type="text/css">
+		input:required:invalid, input:focus:invalid {
+			border-color: red;
+		}
+	</style>
 
 </body>
 </html>

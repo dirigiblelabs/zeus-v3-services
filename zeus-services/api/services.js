@@ -1,96 +1,156 @@
+var logging = require('log/v4/logging');
+var logger = logging.getLogger('org.eclipse.dirigible.zeus.services');
 var rs = require('http/v4/rs');
 var k8s = require('zeus-services/k8s');
+var apierrors = require("kubernetes/errors");
+var ServiceEntries = require("kubernetes/apis/networking.istio.io/v1alpha3/ServiceEntries");
+var Credentials = require("zeus-deployer/utils/Credentials");
+
+var serviceEntries = function(){
+    let credentials = Credentials.getDefaultCredentials();
+	return new ServiceEntries(credentials.server, credentials.token, "zeus");
+};
+
+function fromResource(resource){
+    let _e = {
+        name: resource.metadata.name,
+        createTime: resource.metadata.creationTimestamp,
+        hosts: resource.spec.hosts,
+        ports: resource.spec.ports
+    };
+    return _e;
+}
+
+function toResource(entity){
+   let _e = {
+        "apiVersion": "networking.istio.io/v1alpha3",
+        "kind": "ServiceEntry",
+        "metadata": {
+            "name": entity.name,
+            "namespace": "zeus",
+        },
+        "spec": {
+            "location": "MESH_EXTERNAL",
+            "resolution": "DNS",
+            "hosts": entity.hosts,
+            "ports": entity.ports
+        }     
+    };
+    return _e;
+}
+
+function sendError(err, response){
+    logger.error(err);
+    if (err instanceof apierrors.FieldValueInvalidError){
+        response.status = 422;
+        response.println(JSON.stringify({
+            reason: "Invalid",
+            message: err.message
+        }, null, 2));
+        return;
+    }
+    if (err instanceof apierrors.NotFoundError){
+        response.status = 404;
+        response.println(JSON.stringify({
+            reason: "NotFound"
+        }, null, 2));
+        return;
+    }
+    response.status = 500;
+    response.println(JSON.stringify({
+            reason: "InternalServerError",
+            message: err.message
+        }, null, 2));
+}
 
 rs.service()
 	.resource('')
 		.get(function(ctx, request, response) {
-			var queryOptions = {};
-			var parameters = request.getParameterNames();
+			let queryOptions = {};
+			let parameters = request.getParameterNames();
 			for (var i = 0; i < parameters.length; i ++) {
 				queryOptions[parameters[i]] = request.getParameter(parameters[i]);
 			}
             let entities = [];
-            let api = new k8s();
+            let api = serviceEntries();
             try{
-			    entities = api.listServices(queryOptions).map(function(entity){
-                    return {
-                        name: entity.metadata.name,
-                        hosts: entity.spec.hosts.join(","),
-                        ports: entity.spec.ports.map(function(port){
-                            return port.protocol+":"+port.number;
-                        }).join(",")
-                    }
-                });
+			    entities = api.list(queryOptions).map(fromResource);
                 response.println(JSON.stringify(entities,null,2));
             } catch (err){
-                response.setStatus(500);
-                response.println('Internal server error: '+ err);
+                sendError(err, response);
             }
             response.setHeader('X-data-count', entities.length);
 		})
         .produces("application/json")
 	.resource('count')
 		.get(function(ctx, request) {
-			var queryOptions = {};
-			var parameters = request.getParameterNames();
+			let queryOptions = {};
+			let parameters = request.getParameterNames();
 			for (var i = 0; i < parameters.length; i ++) {
 				queryOptions[parameters[i]] = request.getParameter(parameters[i]);
 			}
-            let api = new k8s();
-			var entities = api.listServices(queryOptions);
-            response.println(JSON.stringify({
-                "count": entities.legnth
-            }, null, 2));
+            let api = serviceEntries();
+            try{
+            	let entities = api.list(queryOptions);
+                response.println(JSON.stringify({
+                    "count": entities.legnth
+                }, null, 2));   
+            } catch (err){
+                sendError(err, response);
+            }
 		})
         .produces("application/json")
-	.resource('{id}')
+	.resource('{name}')
 		.get(function(ctx, request, response) {
-			var id = ctx.pathParameters.id;
+			var name = ctx.pathParameters.name;
+            let api = serviceEntries();
             try{
-                let api = new k8s();
-                let entity = api.getService(id);
-                response.println(JSON.stringify(entity,null,2));
+                let entity = api.get(name);
+                let payloadObj = fromResource(entity);
+                let payload = JSON.stringify(payloadObj,null,2);
+                response.println(payload);
             } catch (err){
-                response.status = 500;
-                if (err instanceof k8s.serviceEntries.NotFoundError){
-                    response.status = 404;
-                    response.println("Not found");
-                }
-                response.println("Internal server error: "+ err);
+                 sendError(err, response);
             }
 		})
         .produces("application/json")
 	.resource('')
 		.post(function(ctx, request, response) {
-			var entity = request.getJSON();
-            let api = new k8s();
-			entity = api.create(entity);
-			response.setHeader('Content-Location', '/services/v3/js/zeus-services/api/services.js/' + entity.metadata.name);
-			response.status = 201;
-		})
-        .consumes("application/json")
-	.resource('{id}')
-		.put(function(ctx, request, response) {
-            var id = ctx.pathParameters.id;
-			var entity = request.getJSON();
-            let api = new k8s();
-			api.update(id, entity);
-		})
-        .consumes("application/json")
-	.resource('{id}')
-		.delete(function(ctx, request, response) {
-			var id = ctx.pathParameters.id;
-            response.setStatus(204);
+			let entity = request.getJSON();
+            let resource = toResource(entity);
+            let api = serviceEntries();
             try{
-                let api = new k8s();
-                api.delete(id);
+                api.apply(resource);
+                response.setHeader('Content-Location', '/services/v3/js/zeus-services/api/services.js/' + resource.metadata.name);
+                response.status = 201;
+            } catch(err){
+               sendError(err, response);
+            }
+		})
+        .consumes("application/json")
+	.resource('{name}')
+		.put(function(ctx, request, response) {
+            //let name = ctx.pathParameters.name;
+			let entity = request.getJSON();
+            let resource = toResource(entity);
+            let api = serviceEntries();
+             try{
+                api.apply(resource);
+                response.status = 201;
+            } catch(err){
+                sendError(err, response);
+            }
+		})
+        .consumes("application/json")
+	.resource('{name}')
+		.delete(function(ctx, request, response) {
+			let name = ctx.pathParameters.name;
+            response.setStatus(204);
+            let api = serviceEntries();
+            try{
+                api.delete(name);
             } catch (err){
-                 response.status = 500;
-                if (err instanceof k8s.serviceEntries.NotFoundError){
-                    response.status = 404;
-                    response.println("Not found");
-                }
-                response.println("Internal server error: "+ err);
+                sendError(err, response);
             }
 		})
 .execute();

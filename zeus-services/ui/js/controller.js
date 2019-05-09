@@ -1,4 +1,4 @@
-angular.module('page', ['ideUiCore', 'ngRsData', 'ui.bootstrap'])
+angular.module('page', ['ideUiCore', 'ngRs', 'ui.bootstrap'])
 .config(["messageHubProvider", function(messageHubProvider) {
 	messageHubProvider.evtNamePrefix = 'zeus.Explore.Services';
 }])    
@@ -46,12 +46,7 @@ angular.module('page', ['ideUiCore', 'ngRsData', 'ui.bootstrap'])
 		        .then(function (data) {
 	                this.dataCount = data.$count;
 	                this.dataPages = Math.ceil(this.dataCount / this.dataLimit);
-	                this.data = data.map(function(entity){
-                        entity.host = entity.hosts;
-                        entity.portProto = entity.ports.split(":")[0];
-                        entity.portNumber = entity.ports.split(":")[1];
-                        return entity;
-                    });
+	                this.data = data;
 	            }.bind(this))
 	            .catch(function (err) {
 	               if (err.data){
@@ -61,9 +56,25 @@ angular.module('page', ['ideUiCore', 'ngRsData', 'ui.bootstrap'])
 	            });
     };
 
+    this.formatHosts = function(hosts){
+        return hosts.join(',');
+    };
+
+    this.formatPorts = function(ports){
+        return ports.map(function(port){
+            return port.protocol + ":" + port.number;
+        })
+        .join(',');
+    };
+
     this.openNewDialog = function (entity) {
         this.actionType = entity?'update':'new';
-        this.entity = entity || {};
+        this.entity = entity || {
+            hosts: [],
+            ports: []
+        };
+        this.port = {};
+        this.host;
         toggleEntityModal();
     };
 
@@ -80,17 +91,13 @@ angular.module('page', ['ideUiCore', 'ngRsData', 'ui.bootstrap'])
     };
 	
 	var entityAction = function(action){
-        if (entity.portNumber && entity.portProto){
-            entity.ports = [{
-                name: entity.portProto.toLowerCase(),
-                "number": entity.portNumber,
-                "protocol": entity.portProto
-            }]
-            if (entity.host){
-                entity.hosts = [entity.host];
-            }
+        this.port = {};
+        this.host = "";
+        let args = [this.entity];
+        if(action === 'update'){
+            args.unshift({name: this.entity.name});
         }
-		return Entity[action]({id: this.entity.id}, this.entity).$promise
+		return Entity[action].apply(this, args).$promise
 			 	.then(function () {
 		            this.loadPage(this.dataPage);
 		            $messageHub.messageEntityModified();
@@ -119,7 +126,37 @@ angular.module('page', ['ideUiCore', 'ngRsData', 'ui.bootstrap'])
     this.parseDate = function(dateString){
     	return Date.parse(dateString);
     };
-    
+
+    this.addHost = function(){
+        if(this.host){
+            this.entity.hosts.push(this.host);
+        }
+        this.host = "";        
+    };
+
+    this.removeHost = function(host){
+       this.entity.hosts = this.entity.hosts.filter((item) => item !== host);
+    };
+
+    this.addPort =  function(){
+        this.entity.ports.push({
+            "protocol": this.port.protocol.toUpperCase(),
+            "number": this.port.number,
+        });
+        this.port.protocol = "";
+        delete this.port.number;
+    };
+
+    this.removePort =  function(port){
+        this.entity.ports = this.entity.ports.filter((item) => {
+           item.protocol !== port.protocol && item.number!== port.number
+       });
+    };
+
+    this.canSubmit = function(){
+        return this.entity && this.entity.name && this.entity.hosts.length && this.entity.ports.length;
+    };
+
     $messageHub.onEntityRefresh(this.loadPage);
 
     var toggleEntityModal = function() {

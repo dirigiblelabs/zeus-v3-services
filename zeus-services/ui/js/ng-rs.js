@@ -1,4 +1,4 @@
-angular.module('ngRsData', ['ngResource'])
+angular.module('ngRs', ['ngResource'])
 .factory('httpRequestInterceptor', function () {
     return {
         request: function (config) {
@@ -29,18 +29,7 @@ angular.module('ngRsData', ['ngResource'])
             },
             save: {
                 method: 'POST',
-                interceptor: {
-                    response: function (res) {
-                        var location = res.headers('Location');
-                        if (location) {
-                            var id = location.substring(location.lastIndexOf('/') + 1);
-                            angular.extend(res.resource, { "id": id });
-                        } else {
-                            $log.error('Cannot infer id after save operation. HTTP Response Header "Location" is missing: ' + location);
-                        }
-                        return res.resource;
-                    }
-                },
+                params: { name: "" },
                 isArray: false
             },
             update: {
@@ -54,6 +43,6 @@ angular.module('ngRsData', ['ngResource'])
     this.$get = ['$resource', 'ResourceSvcConfiguration', function ($resource, ResourceSvcConfiguration) {
 		var cfg = angular.copy(ResourceSvcConfiguration.cfg);
 		cfg = angular.merge(cfg, config);
-        return $resource(config.apiEndpoint + '/:id', { id: '@id' }, cfg);
+        return $resource(config.apiEndpoint + '/:name', { name: '@name' }, cfg);
     }];
 })
