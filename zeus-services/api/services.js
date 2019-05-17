@@ -1,7 +1,6 @@
 var logging = require('log/v4/logging');
 var logger = logging.getLogger('org.eclipse.dirigible.zeus.services');
 var rs = require('http/v4/rs');
-var k8s = require('zeus-services/k8s');
 var apierrors = require("kubernetes/errors");
 var ServiceEntries = require("kubernetes/apis/networking.istio.io/v1alpha3/ServiceEntries");
 var Credentials = require("zeus-deployer/utils/Credentials");
