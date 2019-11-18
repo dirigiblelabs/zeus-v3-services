@@ -8,8 +8,9 @@
  * SAP - initial API and implementation
  */
 
-var k8s = require('zeus-services/k8s');
-var api = new k8s();
+// TODO
+// var k8s = require('zeus-services/k8s');
+// var api = new k8s();
 
 exports.getTile = function(relativePath) {
 	return {
@@ -17,7 +18,7 @@ exports.getTile = function(relativePath) {
 		'group': 'Explore',
 		'icon': 'th-large',
 		'location': relativePath + 'services/v3/web/zeus-applications/ui/Explore/index.html',
-		'count':  api.listServices().length,
+		// 'count':  api.listBindings().length,
 		'order': '100'
 	};
 };
